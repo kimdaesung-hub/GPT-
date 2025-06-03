@@ -24,6 +24,7 @@ app.get('/law', async (req, res) => {
     const lawName = parsed?.Law?.법령명 || '';
     const 조문들 = normalizeArray(parsed?.Law?.조문단위);
 
+    // ✅ 조문번호 매핑 처리
     const formattedArticle = formatArticleNumber(article);
 
     const target = 조문들.find(j => {
@@ -51,7 +52,7 @@ app.get('/law', async (req, res) => {
   }
 });
 
-// ✅ 사용자 입력을 실제 조문번호(7자리)로 매핑
+// ✅ 조문번호 매핑 테이블
 function formatArticleNumber(input) {
   const table = {
     '1': '0001000',
@@ -59,17 +60,18 @@ function formatArticleNumber(input) {
     '3': '0003000',
     '10': '0010000',
     '57의2': '0057020'
-    // 필요 시 여기에 더 추가 가능
+    // 필요한 조문번호는 여기에 계속 추가
   };
 
   if (table[input]) return table[input];
 
-  // 이미 7자리 숫자인 경우 그대로 사용
+  // 이미 7자리면 그대로 사용
   if (/^\d{7}$/.test(input)) return input;
 
-  return input; // 기본 fallback (안 맞을 가능성 높음)
+  return input; // fallback
 }
 
+// ✅ 조문 내용 구성
 function buildArticleContent(조문) {
   let content = '';
   if (조문.조문내용) content += extractText(조문.조문내용) + '\n';
@@ -92,17 +94,20 @@ function buildArticleContent(조문) {
   return content.trim();
 }
 
+// ✅ 안전한 텍스트 추출
 function extractText(val) {
   if (!val) return '';
   if (typeof val === 'string') return val;
   return val._ || val['#cdata-section'] || '';
 }
 
+// ✅ 배열 아닌 경우도 배열처럼 처리
 function normalizeArray(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
 
+// ✅ 서버 실행
 app.listen(PORT, () => {
   console.log(`✅ 프록시 서버 실행 중: http://localhost:${PORT}`);
 });
