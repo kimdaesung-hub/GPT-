@@ -20,20 +20,28 @@ app.get("/law", async (req, res) => {
     const response = await axios.get(url);
     const data = response.data;
 
-    const articles = data.조문;
-    const found = articles.find(item => item.조문번호 == article);
+    const lawData = data.Law || data.법령 || {};
+    const articles = lawData.조문;
+
+    if (!articles || !Array.isArray(articles)) {
+      return res.status(404).json({
+        error: "이 법령에는 조문 데이터가 없습니다. 개정문 또는 텍스트만 포함된 법령일 수 있습니다.",
+        availableFields: Object.keys(lawData)
+      });
+    }
+
+    const found = articles.find((item) => item.조문번호 == article);
 
     if (!found) {
       return res.status(404).json({ error: `${article}조를 찾을 수 없습니다.` });
     }
 
     return res.json({
-      법령명: data.법령명_한글,
+      법령명: lawData.법령명_한글 || lawData.법령명 || "알 수 없음",
       조문번호: found.조문번호,
       조문제목: found.조문제목,
-      조문내용: found.조문내용
+      조문내용: found.조문내용,
     });
-
   } catch (error) {
     return res.status(500).json({ error: "조회 실패", detail: error.message });
   }
