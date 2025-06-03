@@ -1,7 +1,7 @@
 {
   "name": "law-proxy-api",
   "version": "1.0.0",
-  "description": "국가법령정보 프록시 API (XML to JSON)",
+  "description": "국가법령정보 프록시 API",
   "main": "index.js",
   "type": "module",
   "scripts": {
