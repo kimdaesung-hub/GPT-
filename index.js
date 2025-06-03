@@ -4,39 +4,38 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/law", async (req, res) => {
-  const { id, article } = req.query;
+  const lawId = req.query.id;
+  const article = req.query.article;
 
-  if (!id || !article) {
-    return res.status(400).json({ error: "법령ID(id)와 조문번호(article)를 입력하세요." });
+  if (!lawId || !article) {
+    return res.status(400).json({ error: "id와 article 쿼리 파라미터가 필요합니다." });
   }
 
   try {
-    const url = `https://www.law.go.kr/DRF/lawService.do?OC=nexpw&target=law&type=json&ID=${id}`;
+    const url = `https://www.law.go.kr/DRF/lawService.do?OC=nexpw&target=law&type=json&ID=${lawId}`;
     const response = await axios.get(url);
+    const data = response.data;
 
-    const lawData = response.data?.Law;
-    const clause = lawData?.조문?.find(c => c.조문번호 === article.toString());
+    const lawName = data.법령명_한글;
+    const articles = data.조문;
 
-    if (!clause) {
-      return res.status(404).json({ error: `조문번호 ${article}번을 찾을 수 없습니다.` });
+    const found = articles.find((item) => item.조문번호 == article);
+
+    if (!found) {
+      return res.status(404).json({ error: `${article}조를 찾을 수 없습니다.` });
     }
 
-    res.json({
-      법령명: lawData.법령명한글 || "알 수 없음",
-      조문번호: clause.조문번호,
-      조문제목: clause.조문제목,
-      조문내용: clause.조문내용
+    return res.json({
+      법령명: lawName,
+      조문번호: found.조문번호,
+      조문제목: found.조문제목,
+      조문내용: found.조문내용,
     });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "법령 정보 가져오기 실패" });
+  } catch (error) {
+    return res.status(500).json({ error: "조회를 실패했습니다.", detail: error.message });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("✅ 국가법령 프록시 서버 실행 중!");
-});
-
 app.listen(PORT, () => {
-  console.log(`✅ 서버가 포트 ${PORT}에서 실행 중`);
+  console.log(`Server started on port ${PORT}`);
 });
