@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
 const xml2js = require('xml2js');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,8 +9,8 @@ const API_KEY = process.env.LAW_API_KEY || 'nexpw';
 
 app.use(cors());
 
-// ✅ /law-all?id=011178&article=57의2
-app.get('/law-all', async (req, res) => {
+// ✅ /law?id=011178&article=57의2
+app.get('/law', async (req, res) => {
   const { id, article } = req.query;
 
   if (!id || !article) {
@@ -18,43 +18,32 @@ app.get('/law-all', async (req, res) => {
   }
 
   try {
-    const url = `https://www.law.go.kr/DRF/lawService.do?OC=${API_KEY}&target=law&type=XML&ID=${id}`;
+    const url = `https://www.law.go.kr/DRF/lawService.do?OC=${API_KEY}&target=lawArticle&type=XML&ID=${id}&article=${encodeURIComponent(article)}`;
     const xml = await axios.get(url).then(r => r.data);
     const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
 
-    const 조문들 = parsed?.Law?.조문단위;
-    if (!조문들) {
-      return res.status(404).json({ error: '조문 목록을 찾을 수 없습니다.' });
-    }
+    const lawName = parsed?.Law?.법령명 || '';
+    const 조문 = parsed?.Law?.조문단위;
 
-    const list = Array.isArray(조문들) ? 조문들 : [조문들];
-
-    const target = list.find(조문 => {
-      const 번호 = 조문.조문번호 || '';
-      const 가지 = 조문.조문가지번호 || '';
-      const 전체번호 = 가지 ? `${번호}의${가지}` : 번호;
-      return 전체번호.replace(/^0+/, '') === article.replace(/^0+/, '');
-    });
-
-    if (!target) {
-      return res.status(404).json({ error: `요청한 조문(${article})을 찾을 수 없습니다.` });
+    if (!조문) {
+      return res.status(404).json({ error: '요청한 조문을 찾을 수 없습니다.' });
     }
 
     const result = {
-      lawName: parsed?.Law?.법령명 || '',
+      lawName,
       articleNumber: article,
-      articleTitle: extractText(target.조문제목),
-      articleContent: buildArticleContent(target)
+      articleTitle: extractText(조문.조문제목),
+      articleContent: buildArticleContent(조문)
     };
 
-    res.json(result);
+    return res.json(result);
   } catch (err) {
     console.error('API 호출 실패:', err.message);
-    res.status(500).json({ error: '외부 API 호출 중 오류가 발생했습니다.' });
+    return res.status(500).json({ error: '외부 API 호출 중 오류가 발생했습니다.' });
   }
 });
 
-// ✅ 조문, 항, 호, 목을 포함한 본문 생성
+// ✅ 조문 본문 구성
 function buildArticleContent(조문) {
   let content = '';
 
@@ -86,7 +75,7 @@ function buildArticleContent(조문) {
   return content.trim();
 }
 
-// ✅ CDATA 또는 일반 텍스트 추출
+// ✅ 유틸 함수들
 function extractText(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -95,11 +84,11 @@ function extractText(value) {
   return '';
 }
 
-function normalizeArray(val) {
-  if (!val) return [];
-  return Array.isArray(val) ? val : [val];
+function normalizeArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 app.listen(PORT, () => {
-  console.log(`✅ XML 기반 프록시 서버 실행 중: http://localhost:${PORT}`);
+  console.log(`✅ 단일 조문 전용 프록시 서버 실행 중: http://localhost:${PORT}`);
 });
