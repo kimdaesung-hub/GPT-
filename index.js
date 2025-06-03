@@ -3,6 +3,10 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.get("/", (req, res) => {
+  res.send("Hello from proxy server!");
+});
+
 app.get("/law", async (req, res) => {
   const lawId = req.query.id;
   const article = req.query.article;
@@ -37,5 +41,5 @@ app.get("/law", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+  console.log(`✅ Server started on port ${PORT}`);
 });
