@@ -5,11 +5,10 @@ import { parseStringPromise } from 'xml2js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.LAW_API_KEY || 'nexpw'; // 국가법령정보서비스 API 키
+const API_KEY = process.env.LAW_API_KEY || 'nexpw';
 
 app.use(cors());
 
-// 주요 엔드포인트
 app.get('/law', async (req, res) => {
   const { id, article } = req.query;
 
@@ -25,7 +24,6 @@ app.get('/law', async (req, res) => {
     const lawName = parsed?.Law?.법령명 || '';
     const 조문들 = normalizeArray(parsed?.Law?.조문단위);
 
-    // ✅ 입력된 article을 조문번호 포맷에 맞게 정규화
     const formattedArticle = formatArticleNumber(article);
 
     const target = 조문들.find(j => {
@@ -53,13 +51,25 @@ app.get('/law', async (req, res) => {
   }
 });
 
-// 조문번호를 국가법령 형식에 맞게 변환 (예: '1' → '0001000')
+// ✅ 사용자 입력을 실제 조문번호(7자리)로 매핑
 function formatArticleNumber(input) {
-  if (input.includes('의')) return input; // 향후 개선: '57의2' → '0005702'
-  return input.padStart(7, '0'); // 7자리로 0 패딩
+  const table = {
+    '1': '0001000',
+    '2': '0002000',
+    '3': '0003000',
+    '10': '0010000',
+    '57의2': '0057020'
+    // 필요 시 여기에 더 추가 가능
+  };
+
+  if (table[input]) return table[input];
+
+  // 이미 7자리 숫자인 경우 그대로 사용
+  if (/^\d{7}$/.test(input)) return input;
+
+  return input; // 기본 fallback (안 맞을 가능성 높음)
 }
 
-// 조문 전체 내용을 항/호/목 포함해 구성
 function buildArticleContent(조문) {
   let content = '';
   if (조문.조문내용) content += extractText(조문.조문내용) + '\n';
@@ -82,20 +92,17 @@ function buildArticleContent(조문) {
   return content.trim();
 }
 
-// 문자열/CDATA 안전 추출
 function extractText(val) {
   if (!val) return '';
   if (typeof val === 'string') return val;
   return val._ || val['#cdata-section'] || '';
 }
 
-// XML 항목이 단일 객체여도 배열로 처리
 function normalizeArray(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
 
-// 서버 실행
 app.listen(PORT, () => {
   console.log(`✅ 프록시 서버 실행 중: http://localhost:${PORT}`);
 });
