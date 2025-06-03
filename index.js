@@ -6,16 +6,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const BASE_URL = 'https://www.law.go.kr/DRF/lawService.do';
-const OC = 'nexpw';
+const OC = 'nexpw';  // 발급받은 사용자 인증키
 const TARGET = 'law';
-const TYPE = 'xml'; // XML 기반으로 요청
+const TYPE = 'xml';  // XML로 요청
 
 // 홈 경로
 app.get('/', (req, res) => {
-  res.send('📘 국가법령정보 XML 프록시 서버입니다.');
+  res.send('📘 국가법령정보 XML 프록시 서버가 정상 동작 중입니다.');
 });
 
-// 조문 조회 API
+// /law?id=법령ID&article=조문번호
 app.get('/law', async (req, res) => {
   const { id, article } = req.query;
 
@@ -34,7 +34,7 @@ app.get('/law', async (req, res) => {
       trim: true,
     });
 
-    const law = parsed.법령;
+    const law = parsed?.법령;
     const rawArticles = law?.조문?.조문단위;
 
     if (!rawArticles) {
@@ -45,7 +45,10 @@ app.get('/law', async (req, res) => {
     }
 
     const articleList = Array.isArray(rawArticles) ? rawArticles : [rawArticles];
-    const found = articleList.find(a => a.조문번호 == article);
+
+    // 같은 번호의 조문 중 조문제목이 존재하는 것을 우선 선택
+    const candidates = articleList.filter(a => a.조문번호 == article);
+    const found = candidates.find(a => a.조문제목) || candidates[0];
 
     if (!found) {
       return res.status(404).json({
@@ -66,7 +69,7 @@ app.get('/law', async (req, res) => {
   }
 });
 
-// 기타 필드 조회 (개정문, 제개정이유 등)
+// /law-text?id=법령ID&field=필드명 (ex: 개정문, 제개정이유)
 app.get('/law-text', async (req, res) => {
   const { id, field } = req.query;
 
@@ -85,11 +88,13 @@ app.get('/law-text', async (req, res) => {
       trim: true,
     });
 
-    const value = parsed?.법령?.[field];
+    const law = parsed?.법령;
+    const value = law?.[field];
+
     if (!value) {
       return res.status(404).json({
         error: `요청하신 필드(${field})가 없습니다.`,
-        availableFields: Object.keys(parsed?.법령 || {}),
+        availableFields: Object.keys(law || {}),
       });
     }
 
