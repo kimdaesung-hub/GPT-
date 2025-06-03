@@ -1,7 +1,7 @@
 {
   "name": "law-proxy-server",
-  "version": "1.0.0",
-  "description": "국가법령정보 API 프록시 서버",
+  "version": "1.1.0",
+  "description": "국가법령정보 API 프록시 서버 (특정 조문 필터링 포함)",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,7 +9,6 @@
   "dependencies": {
     "axios": "^1.6.8",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "xml2js": "^0.6.2"
+    "express": "^4.18.2"
   }
 }
