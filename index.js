@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { parseStringPromise } from 'xml2js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -7,13 +8,14 @@ const PORT = process.env.PORT || 3000;
 const BASE_URL = 'https://www.law.go.kr/DRF/lawService.do';
 const OC = 'nexpw';
 const TARGET = 'law';
-const TYPE = 'json';
+const TYPE = 'xml'; // JSON → XML로 변경
 
+// 홈 경로 테스트
 app.get('/', (req, res) => {
-  res.send('✅ 국가법령정보 프록시 서버가 실행 중입니다.');
+  res.send('📘 XML 기반 국가법령정보 프록시 서버입니다.');
 });
 
-// 특정 조문 요청: /law?id=006320&article=1
+// 조문 번호로 특정 조항 추출
 app.get('/law', async (req, res) => {
   const { id, article } = req.query;
 
@@ -22,39 +24,45 @@ app.get('/law', async (req, res) => {
   }
 
   try {
+    // XML 데이터 요청
     const response = await axios.get(BASE_URL, {
       params: { OC, target: TARGET, type: TYPE, ID: id },
+      responseType: 'text',
     });
 
-    const lawData = response.data?.법령;
-    if (!lawData) {
+    // XML → JSON 변환
+    const jsonResult = await parseStringPromise(response.data, { explicitArray: false });
+    const law = jsonResult.법령;
+
+    if (!law) {
       return res.status(404).json({ error: '법령 데이터를 찾을 수 없습니다.' });
     }
 
-    // 조문 데이터가 lawData.조문 안에 없고, 숫자 키로만 되어있는 경우 처리
-    const allArticles = Object.values(lawData).filter(item => item?.조문번호);
-
-    if (allArticles.length === 0) {
+    const articles = law.조문;
+    if (!articles) {
       return res.status(404).json({
-        error: '이 법령에는 조문 데이터가 없습니다.',
-        availableFields: Object.keys(lawData),
+        error: '이 법령에는 조문이 없습니다.',
+        availableFields: Object.keys(law),
       });
     }
 
-    const articleData = allArticles.find(a => a.조문번호 == article);
+    // 단일 조문인지, 배열인지 확인
+    const articleList = Array.isArray(articles) ? articles : [articles];
 
-    if (!articleData) {
+    const found = articleList.find(a => a.조문번호 == article);
+
+    if (!found) {
       return res.status(404).json({
-        error: '조문 번호를 찾을 수 없습니다.',
-        availableArticles: allArticles.map(a => a.조문번호),
+        error: '해당 조문번호를 찾을 수 없습니다.',
+        availableArticles: articleList.map(a => a.조문번호),
       });
     }
 
     res.json({
-      법령명: lawData.법령명_한글 || '알 수 없음',
-      조문번호: articleData.조문번호,
-      조문제목: articleData.조문제목 || '',
-      조문내용: articleData.조문내용 || '',
+      법령명: law.기본정보?.법령명한글 || '알 수 없음',
+      조문번호: found.조문번호,
+      조문제목: found.조문제목,
+      조문내용: found.조문내용,
     });
 
   } catch (err) {
@@ -62,7 +70,7 @@ app.get('/law', async (req, res) => {
   }
 });
 
-// 개정문, 제개정이유 등 조회: /law-text?id=011178&field=개정문
+// 기타 필드(개정문, 제개정이유 등) 조회
 app.get('/law-text', async (req, res) => {
   const { id, field } = req.query;
 
@@ -73,20 +81,21 @@ app.get('/law-text', async (req, res) => {
   try {
     const response = await axios.get(BASE_URL, {
       params: { OC, target: TARGET, type: TYPE, ID: id },
+      responseType: 'text',
     });
 
-    const lawData = response.data?.법령;
-    if (!lawData || !lawData[field]) {
+    const law = await parseStringPromise(response.data, { explicitArray: false });
+
+    const value = law?.법령?.[field];
+    if (!value) {
       return res.status(404).json({
-        error: `요청하신 필드(${field})가 존재하지 않습니다.`,
-        availableFields: Object.keys(lawData || {}),
+        error: `요청하신 필드(${field})가 없습니다.`,
+        availableFields: Object.keys(law?.법령 || {}),
       });
     }
 
-    const value = lawData[field];
-    const cleanValue = Array.isArray(value) ? value.flat().join('\n') : value;
-
-    res.json({ [field]: cleanValue });
+    const flat = Array.isArray(value) ? value.join('\n') : value;
+    res.json({ [field]: flat });
 
   } catch (err) {
     res.status(500).json({ error: '조회 실패', detail: err.message });
@@ -94,5 +103,5 @@ app.get('/law-text', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Proxy server listening on port ${PORT}`);
+  console.log(`✅ XML Proxy server running on port ${PORT}`);
 });
