@@ -1,5 +1,6 @@
 const express = require("express");
 const axios = require("axios");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -7,7 +8,6 @@ app.get("/", (req, res) => {
   res.send("✅ 국가법령정보 프록시 서버 작동 중입니다.");
 });
 
-// 조문 필터용
 app.get("/law", async (req, res) => {
   const lawId = req.query.id;
   const article = req.query.article;
@@ -48,7 +48,6 @@ app.get("/law", async (req, res) => {
   }
 });
 
-// 개정문, 부칙 등 필드 조회용
 app.get("/law-text", async (req, res) => {
   const lawId = req.query.id;
   const field = req.query.field;
