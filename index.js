@@ -5,15 +5,26 @@ import cors from 'cors';
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.LAW_API_KEY || 'nexpw';
+const LAW_ID = '011178'; // 지방세특례제한법
 
 app.use(cors());
+app.use(express.json());
 
-app.get('/law', async (req, res) => {
-  const { id, article } = req.query;
-
-  if (!id) {
-    return res.status(400).json({ error: 'id 쿼리 파라미터는 필수입니다.' });
+app.get('/law/query', async (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    return res.status(400).json({ error: 'q 쿼리 파라미터는 필수입니다.' });
   }
+
+  // 예: "지방세특례제한법 제1조 내용알려줘"
+  const articleMatch = q.match(/제\s*([0-9]+)(조(?:의[0-9]+)?)?/);
+  if (!articleMatch) {
+    return res.status(400).json({ error: '요청에서 조문 번호를 찾을 수 없습니다.' });
+  }
+
+  const base = articleMatch[1]; // e.g., 1
+  const extra = articleMatch[2]?.replace(/[^의0-9]/g, '') || ''; // e.g., '의2'
+  const articleNumber = base + extra;
 
   try {
     const url = `https://www.law.go.kr/DRF/lawService.do`;
@@ -22,7 +33,7 @@ app.get('/law', async (req, res) => {
         OC: API_KEY,
         type: 'json',
         target: 'law',
-        ID: id,
+        ID: LAW_ID,
       },
     });
 
@@ -30,18 +41,7 @@ app.get('/law', async (req, res) => {
     const lawName = parsed?.Law?.법령명 || '';
     const 조문들 = normalizeArray(parsed?.Law?.조문단위);
 
-    // article 파라미터가 없으면 전체 반환
-    if (!article) {
-      const articles = 조문들.map(j => ({
-        articleNumber: extractText(j.조문번호),
-        articleTitle: extractText(j.조문제목) || `제${j.조문번호}조`,
-        articleContent: buildArticleContent(j),
-      }));
-      return res.json({ lawName, articles });
-    }
-
-    // article 파라미터가 있을 경우 해당 조문만 필터링
-    const formattedArticle = formatArticleNumber(article);
+    const formattedArticle = formatArticleNumber(articleNumber);
 
     const target = 조문들.find(j => {
       const 번호 = j?.조문번호;
@@ -49,13 +49,13 @@ app.get('/law', async (req, res) => {
     });
 
     if (!target) {
-      return res.status(404).json({ error: `요청한 조문(${article})을 찾을 수 없습니다.` });
+      return res.status(404).json({ error: `요청한 조문(${articleNumber})을 찾을 수 없습니다.` });
     }
 
     const result = {
       lawName,
-      articleNumber: article,
-      articleTitle: extractText(target.조문제목) || `제${article}조`,
+      articleNumber,
+      articleTitle: extractText(target.조문제목) || `제${articleNumber}조`,
       articleContent: buildArticleContent(target),
     };
 
@@ -67,13 +67,11 @@ app.get('/law', async (req, res) => {
 });
 
 function formatArticleNumber(input) {
-  // 앞자리 0 제거 또는 '④' 같은 항문자를 정수로 단순화
   return input.replace(/^0+/, '').replace(/[^\d의]/g, '');
 }
 
 function buildArticleContent(조문) {
   let content = '';
-
   if (조문.조문내용) content += extractText(조문.조문내용) + '\n';
 
   const 항들 = normalizeArray(조문.항);
@@ -85,7 +83,6 @@ function buildArticleContent(조문) {
       const 호번호 = extractText(호.호번호);
       const 호가지번호 = extractText(호.호가지번호);
       const 호내용 = extractText(호.호내용);
-
       const 호제목 = 호가지번호 ? `${호번호}의${호가지번호}` : 호번호;
       content += `  ${호제목} ${호내용}\n`;
 
