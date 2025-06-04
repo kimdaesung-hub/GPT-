@@ -5,29 +5,25 @@ import cors from 'cors';
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.LAW_API_KEY || 'nexpw';
-const LAW_ID = '011178'; // 지방세특례제한법
+const LAW_ID = '011178'; // 지방세특례제한법 고정 ID
 
 app.use(cors());
 app.use(express.json());
 
 app.get('/law/query', async (req, res) => {
   const { q } = req.query;
-  if (!q) {
-    return res.status(400).json({ error: 'q 쿼리 파라미터는 필수입니다.' });
+
+  if (!q || typeof q !== 'string') {
+    return res.status(400).json({ error: 'q 파라미터는 문자열이어야 합니다.' });
   }
 
-  // 예: "지방세특례제한법 제1조 내용알려줘"
-  const articleMatch = q.match(/제\s*([0-9]+)(조(?:의[0-9]+)?)?/);
-  if (!articleMatch) {
-    return res.status(400).json({ error: '요청에서 조문 번호를 찾을 수 없습니다.' });
+  const articleNumber = extractArticleNumber(q);
+  if (!articleNumber) {
+    return res.status(400).json({ error: '자연어에서 조문 번호를 추출할 수 없습니다.' });
   }
-
-  const base = articleMatch[1]; // e.g., 1
-  const extra = articleMatch[2]?.replace(/[^의0-9]/g, '') || ''; // e.g., '의2'
-  const articleNumber = base + extra;
 
   try {
-    const url = `https://www.law.go.kr/DRF/lawService.do`;
+    const url = 'https://www.law.go.kr/DRF/lawService.do';
     const response = await axios.get(url, {
       params: {
         OC: API_KEY,
@@ -38,7 +34,7 @@ app.get('/law/query', async (req, res) => {
     });
 
     const parsed = response.data;
-    const lawName = parsed?.Law?.법령명 || '';
+    const lawName = parsed?.Law?.법령명 || '법령명 없음';
     const 조문들 = normalizeArray(parsed?.Law?.조문단위);
 
     const formattedArticle = formatArticleNumber(articleNumber);
@@ -66,6 +62,17 @@ app.get('/law/query', async (req, res) => {
   }
 });
 
+// 조문 번호 추출 함수: 제10조의2 → "10의2"
+function extractArticleNumber(text) {
+  const match = text.match(/제\s*(\d+)(?:\s*조(?:의\s*(\d+))?)?/);
+  if (!match) return null;
+
+  const base = match[1];       // 숫자 부분
+  const sub = match[2] ? `의${match[2]}` : ''; // "의2" 부분
+  return base + sub;
+}
+
+// article 비교용 포맷
 function formatArticleNumber(input) {
   return input.replace(/^0+/, '').replace(/[^\d의]/g, '');
 }
@@ -84,6 +91,7 @@ function buildArticleContent(조문) {
       const 호가지번호 = extractText(호.호가지번호);
       const 호내용 = extractText(호.호내용);
       const 호제목 = 호가지번호 ? `${호번호}의${호가지번호}` : 호번호;
+
       content += `  ${호제목} ${호내용}\n`;
 
       const 목들 = normalizeArray(호.목);
